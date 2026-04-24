@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environments
+venv/
+.venv/
+win_venv/
+env/
+
+# Environment Variables
+.env
+.env.local
+
+# pytest
+.pytest_cache/

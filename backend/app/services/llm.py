@@ -1,20 +1,21 @@
 """
-LLM service – Google Gemini integration via REST API.
-
-Uses the Gemini API directly through httpx for maximum compatibility.
+LLM service – Integration with OpenRouter.
 """
 
+import os
 import httpx
 from typing import List, Optional
+from dotenv import load_dotenv
 
 from app.schemas import HistoryMessage
 
-GEMINI_API_KEY = "AIzaSyCskHYsNdNjNBlzeWxNNiOikkLe59soBJw"
-GEMINI_MODEL = "gemini-2.5-flash"
-GEMINI_URL = (
-    f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}"
-    f":generateContent?key={GEMINI_API_KEY}"
-)
+# Load environment variables from .env file
+load_dotenv()
+
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+# Using a free model available on OpenRouter
+OPENROUTER_MODEL = "google/gemini-2.5-flash"
 
 SYSTEM_INSTRUCTION = (
     "You are NelBOT, a friendly and helpful AI assistant. "
@@ -23,13 +24,12 @@ SYSTEM_INSTRUCTION = (
     "Keep responses focused and helpful."
 )
 
-
 async def get_ai_response(
     message: str,
     history: Optional[List[HistoryMessage]] = None,
 ) -> str:
     """
-    Send the conversation to Google Gemini and return the response.
+    Send the conversation to OpenRouter and return the response.
 
     Parameters
     ----------
@@ -43,54 +43,50 @@ async def get_ai_response(
     str
         The AI-generated reply.
     """
-    contents = []
+    messages = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
 
     for msg in (history or [])[:-1]:
-        role = "user" if msg.role == "user" else "model"
-        contents.append({
-            "role": role,
-            "parts": [{"text": msg.content}],
+        messages.append({
+            "role": msg.role,
+            "content": msg.content
         })
 
-    contents.append({
+    messages.append({
         "role": "user",
-        "parts": [{"text": message}],
+        "content": message
     })
-
+    
     payload = {
-        "contents": contents,
-        "systemInstruction": {
-            "parts": [{"text": SYSTEM_INSTRUCTION}],
-        },
-        "generationConfig": {
-            "temperature": 0.7,
-            "topP": 0.95,
-            "maxOutputTokens": 2048,
-        },
+        "model": OPENROUTER_MODEL,
+        "messages": messages,
+        "max_tokens": 2048,
+    }
+
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
     }
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
-                GEMINI_URL,
+                OPENROUTER_URL,
                 json=payload,
-                headers={"Content-Type": "application/json"},
+                headers=headers
             )
             response.raise_for_status()
             data = response.json()
-
-            candidates = data.get("candidates", [])
-            if candidates:
-                parts = candidates[0].get("content", {}).get("parts", [])
-                if parts:
-                    return parts[0].get("text", "I couldn't generate a response.")
+            
+            choices = data.get("choices", [])
+            if choices:
+                return choices[0].get("message", {}).get("content", "I couldn't generate a response.")
 
             return "I couldn't generate a response. Please try again."
 
     except httpx.TimeoutException:
         return "Sorry, the request timed out. Please try again."
     except httpx.HTTPStatusError as e:
-        error_msg = f"Gemini API error: {e.response.status_code} - {e.response.text}"
+        error_msg = f"OpenRouter API error: {e.response.status_code} - {e.response.text}"
         print(error_msg)
         return error_msg
     except Exception as e:
