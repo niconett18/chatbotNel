@@ -6,7 +6,15 @@ import Header from "./Header";
 import MessageBubble from "./MessageBubble";
 import ChatInput from "./ChatInput";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const getApiUrl = () => {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window !== "undefined" && window.location.hostname !== "localhost") {
+    // If deployed and NEXT_PUBLIC_API_URL is missing, use the backend proxy path
+    return "/_/backend";
+  }
+  return "http://localhost:8000";
+};
+const API_URL = getApiUrl();
 
 const SUGGESTIONS = [
   {
